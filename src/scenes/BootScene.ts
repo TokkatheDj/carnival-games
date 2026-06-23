@@ -51,6 +51,16 @@ export class BootScene extends Phaser.Scene {
 
     this.tweens.add({ targets: loadingDots, alpha: 1, duration: 400, delay: 200 });
 
-    this.time.delayedCall(900, () => this.scene.start("HubScene"));
+    let advanced = false;
+    const go = () => {
+      if (advanced) return;
+      advanced = true;
+      this.scene.start("HubScene");
+    };
+    this.time.delayedCall(900, go);
+    // Phaser's clock is driven by requestAnimationFrame, which pauses when the tab
+    // isn't actively rendering; this wall-clock fallback guarantees we leave the
+    // splash even if the game loop is throttled.
+    window.setTimeout(go, 1600);
   }
 }
