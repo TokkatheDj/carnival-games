@@ -1,13 +1,15 @@
 import Phaser from "phaser";
+import { playSynthSfx } from "./SfxSynth";
 
 const MUTE_STORAGE_KEY = "carnival-games-muted";
 
 /**
  * Routes all game audio through one place so volume ceilings and the
  * "no sudden/jarring sound" rule are enforced structurally rather than
- * per call site. Safe to call even when no audio assets are loaded yet —
- * playSfx/playMusic no-op silently instead of throwing, so real sound
- * files can be dropped in later (assets/audio/...) with zero code changes.
+ * per call site. If a real sound asset is loaded for a key, it's played
+ * directly; otherwise playSfx falls back to a procedurally synthesized
+ * tone (see SfxSynth) keyed by the same name, so every call site always
+ * produces a gentle, kid-safe sound with no sample files required.
  */
 export class AudioManager {
   static readonly MAX_SFX_VOLUME = 0.6;
@@ -26,11 +28,24 @@ export class AudioManager {
     return this.scene.cache.audio.exists(key);
   }
 
+  private getAudioContext(): AudioContext | null {
+    const soundManager = this.scene.sound as unknown as { context?: AudioContext };
+    return soundManager.context ?? null;
+  }
+
   playSfx(key: string, volume: number = AudioManager.MAX_SFX_VOLUME): void {
-    if (this.muted || !this.hasSound(key)) return;
-    this.scene.sound.play(key, {
-      volume: Math.min(volume, AudioManager.MAX_SFX_VOLUME),
-    });
+    if (this.muted) return;
+    const cappedVolume = Math.min(volume, AudioManager.MAX_SFX_VOLUME);
+
+    if (this.hasSound(key)) {
+      this.scene.sound.play(key, { volume: cappedVolume });
+      return;
+    }
+
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume();
+    playSynthSfx(ctx, ctx.destination, key, cappedVolume);
   }
 
   playMusic(key: string, loop: boolean = true): void {
