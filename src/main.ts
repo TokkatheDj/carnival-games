@@ -7,6 +7,7 @@ import { BasketballScene } from "./scenes/games/BasketballScene";
 import { RingTossScene } from "./scenes/games/RingTossScene";
 import { WhackAMoleScene } from "./scenes/games/WhackAMoleScene";
 import { SpinWheelScene } from "./scenes/games/SpinWheelScene";
+import { DuckGalleryScene } from "./scenes/games/DuckGalleryScene";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -31,6 +32,7 @@ const config: Phaser.Types.Core.GameConfig = {
     RingTossScene,
     WhackAMoleScene,
     SpinWheelScene,
+    DuckGalleryScene,
   ],
 };
 

@@ -137,6 +137,7 @@ export class SlotsScene extends BaseScene {
           ev.remove();
           const finalSymbol = Phaser.Utils.Array.GetRandom(SYMBOLS);
           text.setText(finalSymbol);
+          this.audio.playSfx("tap-soft");
           this.tweens.add({ targets: text, scale: 1.25, duration: 130, yoyo: true, ease: "Sine.easeOut" });
           onDone(finalSymbol);
         }
@@ -147,7 +148,11 @@ export class SlotsScene extends BaseScene {
   private spin(): void {
     if (this.spinning || !this.statusText || this.reelTexts.length === 0) return;
     this.spinning = true;
-    this.spinButton?.disableInteractive();
+    
+    if (this.spinButton && this.spinButton.input) {
+      this.spinButton.input.enabled = false;
+      this.spinButton.setAlpha(0.6); // Dim to show disabled state visually
+    }
     this.statusText.setText("Spinning...");
 
     const results: string[] = [];
@@ -164,7 +169,11 @@ export class SlotsScene extends BaseScene {
   private evaluateSpin(results: string[]): void {
     this.lastSymbols = results;
     this.spinning = false;
-    this.spinButton?.setInteractive({ useHandCursor: true });
+    
+    if (this.spinButton && this.spinButton.input) {
+      this.spinButton.input.enabled = true;
+      this.spinButton.setAlpha(1); // Restore opacity
+    }
 
     const uniqueCount = new Set(results).size;
 
@@ -180,7 +189,7 @@ export class SlotsScene extends BaseScene {
         title: "JACKPOT!",
         message: "All three matched — amazing spin!",
         buttons: [
-          { label: "Spin Again", color: PALETTE.green, shadowColor: PALETTE.greenDark, onClick: () => {} },
+          { label: "Spin Again", color: PALETTE.green, shadowColor: PALETTE.greenDark, onClick: () => this.spin() },
           { label: "Home", color: PALETTE.blue, shadowColor: PALETTE.blueDark, onClick: () => this.goHome() },
         ],
       });

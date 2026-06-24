@@ -3,27 +3,27 @@ import { BaseScene } from "../BaseScene";
 import { ScoreBadge } from "../../ui/ScoreBadge";
 import { FONT_BODY, FONT_DISPLAY, PALETTE, PALETTE_CSS } from "../../config/theme";
 
-type BallSprite = Phaser.GameObjects.Text & { body: Phaser.Physics.Arcade.Body };
-
-const LAUNCH_POWER = 6.2;
-const MAX_DRAG = 160;
-const GRAVITY_Y = 950;
-
 /**
- * Carnival hoops booth. Drag-and-release aiming with generous "make"
- * detection so near-misses still feel fair to small/imprecise hands.
- * Misses bounce off softly — never a buzzer, never a punishing visual.
+ * Reimagined Carnival Hoops.
+ * Timing-based tap-to-shoot game:
+ * - A beautiful basketball hoop slides left/right at the top of the screen.
+ * - Tap anywhere to shoot the ball straight up.
+ * - Score a "Swish!" if you time it so the hoop is aligned with the ball's trajectory.
+ * - Uses smooth, robust tweens for 100% reliable behavior on all tablets/devices.
  */
 export class BasketballScene extends BaseScene {
   private layoutObjects: Phaser.GameObjects.GameObject[] = [];
   private scoreBadge?: ScoreBadge;
   private statusText?: Phaser.GameObjects.Text;
-  private ball?: BallSprite;
-  private aimLine?: Phaser.GameObjects.Graphics;
+  private ball?: Phaser.GameObjects.Text;
+  
+  private hoopContainer?: Phaser.GameObjects.Container;
+  private hoopTween?: Phaser.Tweens.Tween;
+  
   private ballStart = { x: 0, y: 0 };
   private hoopPos = { x: 0, y: 0 };
-  private rimRadius = 46;
-  private scored = false;
+  private rimRadius = 48;
+  
   private inFlight = false;
   private scoreValue = 0;
 
@@ -32,8 +32,8 @@ export class BasketballScene extends BaseScene {
   }
 
   protected onCreate(): void {
-    this.input.on("drag", this.onDrag, this);
-    this.input.on("dragend", this.onDragEnd, this);
+    // Tap anywhere on the scene background to shoot
+    this.input.on("pointerdown", () => this.shootBall());
     this.layoutAll(this.scale.width, this.scale.height);
   }
 
@@ -47,18 +47,23 @@ export class BasketballScene extends BaseScene {
   }
 
   private clearLayout(): void {
+    if (this.hoopTween) {
+      this.hoopTween.stop();
+      this.hoopTween = undefined;
+    }
+    this.hoopContainer?.destroy();
+    this.hoopContainer = undefined;
     this.layoutObjects.forEach((o) => o.destroy());
     this.layoutObjects = [];
     this.ball = undefined;
-    this.aimLine = undefined;
   }
 
   private layoutAll(width: number, height: number): void {
     this.clearLayout();
     this.inFlight = false;
-    this.scored = false;
     this.cameras.main.setBackgroundColor(PALETTE_CSS.skyDeep);
 
+    // Draw background (Sky & Grass midway base)
     const bg = this.add.graphics();
     bg.fillStyle(PALETTE.skyDeep, 1);
     bg.fillRect(0, 0, width, height * 0.75);
@@ -66,6 +71,7 @@ export class BasketballScene extends BaseScene {
     bg.fillRect(0, height * 0.75, width, height * 0.25);
     this.track(bg);
 
+    // Title
     this.track(
       this.add
         .text(width / 2, Math.max(40, height * 0.05), "🏀 Basketball Hoops 🏀", {
@@ -77,17 +83,23 @@ export class BasketballScene extends BaseScene {
         .setOrigin(0.5),
     );
 
+    // Score Badge
     this.scoreBadge = this.track(new ScoreBadge(this, width - 190, Math.max(40, height * 0.05), this.scoreValue));
 
-    this.hoopPos = { x: width / 2, y: Math.max(150, height * 0.26) };
-    this.rimRadius = Phaser.Math.Clamp(width * 0.05, 36, 54);
-    this.drawHoop();
+    // Calculate positions
+    this.hoopPos = { x: width / 2, y: Math.max(160, height * 0.26) };
+    this.rimRadius = Phaser.Math.Clamp(width * 0.05, 38, 54);
+    
+    // Create the moving hoop container
+    this.createMovingHoop(width);
 
-    this.ballStart = { x: width / 2, y: height - Math.max(120, height * 0.16) };
+    // Ball position (centered horizontally, near the bottom)
+    this.ballStart = { x: width / 2, y: height - Math.max(130, height * 0.18) };
 
+    // Status message
     this.statusText = this.track(
       this.add
-        .text(width / 2, this.ballStart.y + 90, "Drag the ball and let go to shoot!", {
+        .text(width / 2, this.ballStart.y + 90, "Tap anywhere to shoot the ball!", {
           fontFamily: FONT_BODY,
           fontSize: "20px",
           color: "#ffffff",
@@ -97,130 +109,123 @@ export class BasketballScene extends BaseScene {
         .setOrigin(0.5),
     );
 
-    this.aimLine = this.track(this.add.graphics());
-
+    // Spawn the ball at the bottom
     this.spawnBall();
   }
 
-  private drawHoop(): void {
-    const { x, y } = this.hoopPos;
+  private createMovingHoop(width: number): void {
+    const { y } = this.hoopPos;
     const r = this.rimRadius;
 
+    // Create a container to hold the backboard, net, and rim together
+    this.hoopContainer = this.add.container(width / 2, y);
+    this.hoopContainer.setDepth(10);
+
+    // 1. Backboard
     const backboard = this.add.graphics();
     backboard.fillStyle(PALETTE.white, 0.95);
-    backboard.fillRoundedRect(x - r * 1.6, y - r * 1.9, r * 3.2, r * 1.1, 10);
+    backboard.fillRoundedRect(-r * 1.6, -r * 1.9, r * 3.2, r * 1.1, 10);
     backboard.lineStyle(4, PALETTE.blueDark, 1);
-    backboard.strokeRoundedRect(x - r * 0.9, y - r * 1.65, r * 1.8, r * 0.7, 6);
-    this.track(backboard);
+    backboard.strokeRoundedRect(-r * 0.9, -r * 1.65, r * 1.8, r * 0.7, 6);
+    this.hoopContainer.add(backboard);
 
+    // 2. Net
     const net = this.add.graphics();
     net.lineStyle(3, PALETTE.cream, 0.85);
-    const netTop = y - r * 0.1;
-    const netBottom = y + r * 0.85;
+    const netTop = -r * 0.1;
+    const netBottom = r * 0.85;
     for (let i = -3; i <= 3; i++) {
-      net.lineBetween(x + i * (r / 4), netTop, x + i * (r / 5), netBottom);
+      net.lineBetween(i * (r / 4), netTop, i * (r / 5), netBottom);
     }
-    this.track(net);
+    this.hoopContainer.add(net);
 
+    // 3. Rim (drawn on top of net)
     const rim = this.add.graphics();
     rim.lineStyle(8, PALETTE.orange, 1);
-    rim.strokeEllipse(x, y, r * 2, r * 0.55);
-    this.track(rim);
+    rim.strokeEllipse(0, -r * 0.1, r * 2, r * 0.55);
+    this.hoopContainer.add(rim);
+
+    // Tween the hoop left and right
+    const padding = r * 1.8;
+    const minX = padding;
+    const maxX = width - padding;
+
+    // Randomize starting side
+    this.hoopContainer.x = Phaser.Math.Between(0, 1) === 0 ? minX : maxX;
+
+    this.hoopTween = this.tweens.add({
+      targets: this.hoopContainer,
+      x: this.hoopContainer.x === minX ? maxX : minX,
+      duration: width < 600 ? 1900 : 2500, // slower on larger screens
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private spawnBall(): void {
-    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.07, 44, 64);
-    const ball = this.add.text(this.ballStart.x, this.ballStart.y, "🏀", { fontSize: `${fontSize}px` }).setOrigin(0.5) as BallSprite;
-    this.physics.add.existing(ball);
-    ball.body.setCircle(fontSize * 0.32);
-    ball.body.setAllowGravity(false);
-    ball.body.setVelocity(0, 0);
-    ball.setInteractive({ useHandCursor: true, draggable: true });
-    this.input.setDraggable(ball);
-    this.track(ball);
-    this.ball = ball;
+    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.07, 48, 68);
+    this.ball = this.add
+      .text(this.ballStart.x, this.ballStart.y, "🏀", { fontSize: `${fontSize}px` })
+      .setOrigin(0.5)
+      .setDepth(20);
+    this.track(this.ball);
   }
 
-  private onDrag = (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, dragX: number, dragY: number) => {
-    if (obj !== this.ball || this.inFlight) return;
-    const dx = dragX - this.ballStart.x;
-    const dy = dragY - this.ballStart.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    let nx = dragX;
-    let ny = dragY;
-    if (dist > MAX_DRAG) {
-      const scale = MAX_DRAG / dist;
-      nx = this.ballStart.x + dx * scale;
-      ny = this.ballStart.y + dy * scale;
-    }
-    this.ball.setPosition(nx, ny);
-    this.drawAimLine();
-  };
-
-  private onDragEnd = (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
-    if (obj !== this.ball || this.inFlight) return;
-    this.launchBall();
-  };
-
-  private drawAimLine(): void {
-    if (!this.aimLine || !this.ball) return;
-    this.aimLine.clear();
-    const aimX = this.ballStart.x + (this.ballStart.x - this.ball.x);
-    const aimY = this.ballStart.y + (this.ballStart.y - this.ball.y);
-    this.aimLine.lineStyle(4, PALETTE.yellow, 0.8);
-    this.aimLine.lineBetween(this.ball.x, this.ball.y, aimX, aimY);
-  }
-
-  private launchBall(): void {
-    if (!this.ball) return;
-    const dx = this.ballStart.x - this.ball.x;
-    let dy = this.ballStart.y - this.ball.y;
-    if (dy > -120) dy = -120;
-
-    this.ball.body.setAllowGravity(true);
-    this.ball.body.setGravityY(GRAVITY_Y);
-    this.ball.body.setVelocity(dx * LAUNCH_POWER, dy * LAUNCH_POWER);
-
+  private shootBall(): void {
+    if (this.inFlight || !this.ball || !this.hoopContainer) return;
     this.inFlight = true;
-    this.scored = false;
-    this.aimLine?.clear();
-    this.ball.disableInteractive();
     this.statusText?.setText("");
+
+    // Target height is the net rim height
+    const targetY = this.hoopPos.y;
+
+    // Upward launch tween
+    this.tweens.add({
+      targets: this.ball,
+      y: targetY,
+      duration: 650,
+      ease: "Quad.easeOut", // decelerate as it reaches peak
+      onComplete: () => this.checkScore(),
+    });
   }
 
-  update(): void {
-    if (!this.inFlight || !this.ball) return;
-    const body = this.ball.body;
+  private checkScore(): void {
+    if (!this.ball || !this.hoopContainer) return;
 
-    if (
-      !this.scored &&
-      this.ball.y >= this.hoopPos.y - 16 &&
-      this.ball.y <= this.hoopPos.y + 16 &&
-      Math.abs(this.ball.x - this.hoopPos.x) <= this.rimRadius * 0.6 &&
-      body.velocity.y > 0
-    ) {
-      this.scored = true;
+    const diffX = Math.abs(this.ball.x - this.hoopContainer.x);
+    const hitTolerance = this.rimRadius * 0.64;
+
+    if (diffX <= hitTolerance) {
+      // Swish! It goes in!
       this.handleScore();
-    }
-
-    if (this.ball.y > this.scale.height + 100 || this.ball.x < -100 || this.ball.x > this.scale.width + 100) {
-      this.inFlight = false;
-      if (!this.scored) this.handleMiss();
+    } else if (diffX <= this.rimRadius * 1.3) {
+      // Clunky bounce off the rim!
+      this.handleRimBounce();
+    } else {
+      // Complete miss!
+      this.handleMiss();
     }
   }
 
   private celebrate(): void {
-    if (!this.ball) return;
-    for (let i = 0; i < 5; i++) {
+    if (!this.hoopContainer) return;
+    const hx = this.hoopContainer.x;
+    const hy = this.hoopPos.y;
+
+    for (let i = 0; i < 6; i++) {
       const spark = this.add
-        .text(this.hoopPos.x + Phaser.Math.Between(-30, 30), this.hoopPos.y, "✨", { fontSize: "26px" })
-        .setOrigin(0.5);
+        .text(hx + Phaser.Math.Between(-30, 30), hy + Phaser.Math.Between(-10, 10), "✨", { fontSize: "26px" })
+        .setOrigin(0.5)
+        .setDepth(15);
+      
       this.tweens.add({
         targets: spark,
-        y: spark.y - 60,
+        x: spark.x + Phaser.Math.Between(-30, 30),
+        y: spark.y - Phaser.Math.Between(40, 80),
         alpha: 0,
-        duration: 700,
-        ease: "Sine.easeOut",
+        scale: 0.3,
+        duration: 600 + Phaser.Math.Between(0, 200),
         onComplete: () => spark.destroy(),
       });
     }
@@ -228,28 +233,88 @@ export class BasketballScene extends BaseScene {
 
   private handleScore(): void {
     this.audio.playSfx("swish");
+    this.scoreValue += 1;
     this.scoreBadge?.addScore(1);
-    this.statusText?.setText("Swish! Nice shot!");
+    
+    this.statusText?.setText("Swish! Perfect shot!");
     this.celebrate();
-    this.ball?.body.setVelocity(0, 0);
-    this.ball?.body.setAllowGravity(false);
-    this.time.delayedCall(900, () => this.resetBall());
+
+    // Tween the ball falling through the net
+    if (this.ball) {
+      this.tweens.add({
+        targets: this.ball,
+        y: this.hoopPos.y + 110,
+        scale: 0.72, // visually scale down as it goes "into" net
+        alpha: 0.4,
+        duration: 350,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          this.tweens.add({
+            targets: this.ball,
+            alpha: 0,
+            y: this.hoopPos.y + 180,
+            duration: 150,
+            onComplete: () => this.resetBall(),
+          });
+        },
+      });
+    }
+  }
+
+  private handleRimBounce(): void {
+    this.audio.playSfx("soft-bounce");
+    this.statusText?.setText("Bounced off the rim!");
+
+    if (this.ball && this.hoopContainer) {
+      const bounceLeft = this.ball.x < this.hoopContainer.x;
+      const bounceX = this.ball.x + (bounceLeft ? -45 : 45);
+      
+      // Arc bounce away
+      this.tweens.add({
+        targets: this.ball,
+        x: bounceX,
+        y: this.hoopPos.y - 35,
+        angle: bounceLeft ? -180 : 180,
+        duration: 250,
+        ease: "Quad.easeOut",
+        onComplete: () => {
+          this.tweens.add({
+            targets: this.ball,
+            y: this.scale.height + 80,
+            alpha: 0,
+            duration: 450,
+            ease: "Quad.easeIn",
+            onComplete: () => this.resetBall(),
+          });
+        },
+      });
+    }
   }
 
   private handleMiss(): void {
-    this.audio.playSfx("soft-bounce");
-    this.statusText?.setText("So close! Try again!");
-    this.time.delayedCall(500, () => this.resetBall());
+    this.audio.playSfx("soft-roll");
+    this.statusText?.setText("Airball! Try again!");
+
+    // Just continue falling down past screen
+    if (this.ball) {
+      this.tweens.add({
+        targets: this.ball,
+        y: this.scale.height + 80,
+        alpha: 0,
+        duration: 550,
+        ease: "Quad.easeIn",
+        onComplete: () => this.resetBall(),
+      });
+    }
   }
 
   private resetBall(): void {
     if (!this.ball) return;
     this.ball.setPosition(this.ballStart.x, this.ballStart.y);
-    this.ball.body.setVelocity(0, 0);
-    this.ball.body.setAllowGravity(false);
-    this.ball.setInteractive({ useHandCursor: true, draggable: true });
+    this.ball.setAlpha(1);
+    this.ball.setScale(1);
+    this.ball.setAngle(0);
     this.inFlight = false;
-    this.scored = false;
-    this.statusText?.setText("Drag the ball and let go to shoot!");
+    this.statusText?.setText("Tap anywhere to shoot the ball!");
   }
 }

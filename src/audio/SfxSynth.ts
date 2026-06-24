@@ -109,6 +109,15 @@ const RECIPES: Record<string, Recipe> = {
       { freq: NOTE.C6, delay: 0.08, duration: 0.26, gain: 0.5 },
     ],
   },
+  "duck-pop": {
+    tones: [
+      { freq: 650, delay: 0, duration: 0.05, gain: 0.4, wave: "triangle" },
+      { freq: 300, delay: 0.04, duration: 0.12, gain: 0.35, wave: "triangle" },
+    ],
+    noises: [
+      { delay: 0, duration: 0.08, gain: 0.25, filterType: "bandpass", filterFreq: 1100, q: 2 },
+    ],
+  },
 };
 
 function scheduleTone(ctx: AudioContext, dest: AudioNode, note: ToneNote, now: number): void {

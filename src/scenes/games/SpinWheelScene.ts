@@ -34,6 +34,7 @@ export class SpinWheelScene extends BaseScene {
   private spinButton?: Button;
   private scoreValue = 0;
   private spinning = false;
+  private lastWheelAngle = 0;
 
   constructor() {
     super("SpinWheelScene");
@@ -161,8 +162,13 @@ export class SpinWheelScene extends BaseScene {
   private spin(): void {
     if (this.spinning || !this.wheelContainer) return;
     this.spinning = true;
-    this.spinButton?.disableInteractive();
+    
+    if (this.spinButton && this.spinButton.input) {
+      this.spinButton.input.enabled = false;
+      this.spinButton.setAlpha(0.65);
+    }
     this.statusText?.setText("Spinning...");
+    this.lastWheelAngle = this.wheelContainer.angle;
 
     const targetIndex = Phaser.Math.Between(0, PRIZES.length - 1);
     const wedgeAngle = 360 / PRIZES.length;
@@ -186,7 +192,12 @@ export class SpinWheelScene extends BaseScene {
   private onSpinComplete(index: number): void {
     const prize = PRIZES[index];
     this.spinning = false;
-    this.spinButton?.setInteractive({ useHandCursor: true });
+    
+    if (this.spinButton && this.spinButton.input) {
+      this.spinButton.input.enabled = true;
+      this.spinButton.setAlpha(1);
+    }
+    this.scoreValue += 1;
     this.scoreBadge?.addScore(1);
 
     if (prize.tier === "big") {
@@ -197,13 +208,31 @@ export class SpinWheelScene extends BaseScene {
         title: "Big Prize!",
         message: `You won the ${prize.label}! Incredible spin!`,
         buttons: [
-          { label: "Spin Again", color: PALETTE.green, shadowColor: PALETTE.greenDark, onClick: () => {} },
+          { label: "Spin Again", color: PALETTE.green, shadowColor: PALETTE.greenDark, onClick: () => this.spin() },
           { label: "Home", color: PALETTE.blue, shadowColor: PALETTE.blueDark, onClick: () => this.goHome() },
         ],
       });
     } else {
       this.audio.playSfx("prize-chime");
       this.statusText?.setText(`You won a ${prize.label}! ${prize.emoji}`);
+    }
+  }
+
+  update(): void {
+    if (this.spinning && this.wheelContainer) {
+      const currentAngle = this.wheelContainer.angle;
+      const wedgeAngle = 360 / PRIZES.length;
+      
+      const relativeAngle = -90 - currentAngle;
+      const lastRelativeAngle = -90 - this.lastWheelAngle;
+      
+      const currentWedge = Math.floor(Phaser.Math.Wrap(relativeAngle, 0, 360) / wedgeAngle);
+      const lastWedge = Math.floor(Phaser.Math.Wrap(lastRelativeAngle, 0, 360) / wedgeAngle);
+      
+      if (currentWedge !== lastWedge) {
+        this.audio.playSfx("tap-soft");
+      }
+      this.lastWheelAngle = currentAngle;
     }
   }
 }

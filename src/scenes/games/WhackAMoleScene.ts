@@ -131,23 +131,23 @@ export class WhackAMoleScene extends BaseScene {
   private popUp(hole: Hole): void {
     hole.up = true;
     const emoji = Phaser.Utils.Array.GetRandom(CRITTERS);
-    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.06, 36, 56);
+    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.08, 52, 78);
     const critter = this.add
       .text(hole.x, hole.y, emoji, { fontSize: `${fontSize}px` })
       .setOrigin(0.5)
-      .setScale(0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScale(0);
     hole.critter = critter;
 
     this.tweens.add({
       targets: critter,
       scale: 1,
-      y: hole.y - fontSize * 0.4,
+      y: hole.y - fontSize * 0.46,
       duration: 220,
       ease: "Back.easeOut",
     });
 
-    critter.on("pointerup", () => this.boop(hole));
+    critter.on("pointerdown", () => this.boop(hole));
 
     hole.timer = this.time.delayedCall(UP_DURATION, () => {
       if (hole.up) this.duck(hole, false);

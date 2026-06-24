@@ -63,4 +63,12 @@ export const GAME_REGISTRY: GameDef[] = [
     color: PALETTE.yellow,
     shadowColor: PALETTE.yellowDark,
   },
+  {
+    id: "duck-gallery",
+    title: "Duck\nGallery",
+    sceneKey: "DuckGalleryScene",
+    emoji: "🦆",
+    color: PALETTE.pink,
+    shadowColor: PALETTE.pinkDark,
+  },
 ];

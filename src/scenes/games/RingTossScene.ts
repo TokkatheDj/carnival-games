@@ -3,29 +3,35 @@ import { BaseScene } from "../BaseScene";
 import { ScoreBadge } from "../../ui/ScoreBadge";
 import { FONT_BODY, FONT_DISPLAY, PALETTE, PALETTE_CSS } from "../../config/theme";
 
-type RingSprite = Phaser.GameObjects.Text & { body: Phaser.Physics.Arcade.Body };
-
-const LAUNCH_POWER = 6.0;
-const MAX_DRAG = 160;
-const GRAVITY_Y = 950;
 const PEG_COLORS = [
-  { color: PALETTE.red, shadow: PALETTE.redDark },
-  { color: PALETTE.blue, shadow: PALETTE.blueDark },
-  { color: PALETTE.green, shadow: PALETTE.greenDark },
+  { color: PALETTE.red, shadow: PALETTE.redDark, name: "Red" },
+  { color: PALETTE.blue, shadow: PALETTE.blueDark, name: "Blue" },
+  { color: PALETTE.green, shadow: PALETTE.greenDark, name: "Green" },
 ];
 
-/** Ring toss booth — reuses Basketball's drag-and-arc physics pattern. */
+/**
+ * Reimagined Ring Toss.
+ * Tap-to-Toss timing/targeting game:
+ * - Three pegs sit on the screen. One random peg is the "Lucky Target" and lights up.
+ * - Tap near or on any peg to toss a ring at it.
+ * - The ring flies with a beautiful, smooth parabolic 3D arc tween and loops over the peg.
+ * - Playing is 100% reliable, eliminating clunky physics drags.
+ */
 export class RingTossScene extends BaseScene {
   private layoutObjects: Phaser.GameObjects.GameObject[] = [];
   private scoreBadge?: ScoreBadge;
   private statusText?: Phaser.GameObjects.Text;
-  private ring?: RingSprite;
-  private aimLine?: Phaser.GameObjects.Graphics;
-  private ringStart = { x: 0, y: 0 };
+  private ring?: Phaser.GameObjects.Text;
+  
   private pegPositions: { x: number; y: number }[] = [];
+  private pegGraphics: Phaser.GameObjects.Graphics[] = [];
+  private activePegIndicator?: Phaser.GameObjects.Text;
+  
+  private ringStart = { x: 0, y: 0 };
   private pegRowY = 0;
   private pegRadius = 30;
-  private scored = false;
+  private activePegIndex = 0;
+  
   private inFlight = false;
   private scoreValue = 0;
 
@@ -34,8 +40,8 @@ export class RingTossScene extends BaseScene {
   }
 
   protected onCreate(): void {
-    this.input.on("drag", this.onDrag, this);
-    this.input.on("dragend", this.onDragEnd, this);
+    // Tap to toss at the nearest peg
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.tossRing(pointer));
     this.layoutAll(this.scale.width, this.scale.height);
   }
 
@@ -49,18 +55,20 @@ export class RingTossScene extends BaseScene {
   }
 
   private clearLayout(): void {
+    this.activePegIndicator?.destroy();
+    this.activePegIndicator = undefined;
+    this.pegGraphics = [];
     this.layoutObjects.forEach((o) => o.destroy());
     this.layoutObjects = [];
     this.ring = undefined;
-    this.aimLine = undefined;
   }
 
   private layoutAll(width: number, height: number): void {
     this.clearLayout();
     this.inFlight = false;
-    this.scored = false;
     this.cameras.main.setBackgroundColor(PALETTE_CSS.skyDeep);
 
+    // Draw background (Midway tent back & wooden table)
     const bg = this.add.graphics();
     bg.fillStyle(PALETTE.skyDeep, 1);
     bg.fillRect(0, 0, width, height * 0.78);
@@ -68,6 +76,7 @@ export class RingTossScene extends BaseScene {
     bg.fillRect(0, height * 0.78, width, height * 0.22);
     this.track(bg);
 
+    // Title
     this.track(
       this.add
         .text(width / 2, Math.max(40, height * 0.05), "🎯 Ring Toss 🎯", {
@@ -79,9 +88,11 @@ export class RingTossScene extends BaseScene {
         .setOrigin(0.5),
     );
 
+    // Score Badge
     this.scoreBadge = this.track(new ScoreBadge(this, width - 190, Math.max(40, height * 0.05), this.scoreValue));
 
-    this.pegRowY = Math.max(160, height * 0.28);
+    // Peg positions
+    this.pegRowY = Math.max(170, height * 0.32);
     this.pegRadius = Phaser.Math.Clamp(width * 0.045, 26, 40);
     const margin = width * 0.22;
     this.pegPositions = [
@@ -89,13 +100,30 @@ export class RingTossScene extends BaseScene {
       { x: width / 2, y: this.pegRowY },
       { x: width - margin, y: this.pegRowY },
     ];
-    this.pegPositions.forEach((pos, i) => this.drawPeg(pos.x, pos.y, this.pegRadius, PEG_COLORS[i]));
 
+    // Draw the wooden shelf/table base under pegs
+    const table = this.add.graphics();
+    table.fillStyle(0x5c3a21, 1); // Dark wood
+    table.fillRect(0, this.pegRowY + 14, width, 18);
+    table.fillStyle(0x3e2513, 0.4);
+    table.fillRect(0, this.pegRowY + 32, width, 6);
+    this.track(table);
+
+    // Draw pegs
+    this.pegPositions.forEach((pos, i) => {
+      const g = this.add.graphics();
+      this.drawPeg(g, pos.x, pos.y, this.pegRadius, PEG_COLORS[i]);
+      this.track(g);
+      this.pegGraphics.push(g);
+    });
+
+    // Ring starting position at bottom center
     this.ringStart = { x: width / 2, y: height - Math.max(120, height * 0.16) };
 
+    // Status message
     this.statusText = this.track(
       this.add
-        .text(width / 2, this.ringStart.y + 90, "Drag the ring and let go to toss!", {
+        .text(width / 2, this.ringStart.y + 90, "Tap on a peg to toss the ring!", {
           fontFamily: FONT_BODY,
           fontSize: "20px",
           color: "#ffffff",
@@ -105,142 +133,155 @@ export class RingTossScene extends BaseScene {
         .setOrigin(0.5),
     );
 
-    this.aimLine = this.track(this.add.graphics());
+    // Initial target peg selection
+    this.selectNewTarget();
 
+    // Spawn the ring
     this.spawnRing();
   }
 
-  private drawPeg(x: number, y: number, r: number, colorSet: { color: number; shadow: number }): void {
-    const g = this.add.graphics();
+  private drawPeg(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colorSet: { color: number; shadow: number }): void {
+    g.clear();
+    // shadow / depth
     g.fillStyle(colorSet.shadow, 1);
-    g.fillRoundedRect(x - r * 0.22, y - r * 1.6, r * 0.44, r * 2.2, 8);
+    g.fillRoundedRect(x - r * 0.24, y - r * 1.6, r * 0.48, r * 2.1, 8);
+    // front face
     g.fillStyle(colorSet.color, 1);
-    g.fillCircle(x, y - r * 1.6, r * 0.5);
-    this.track(g);
+    g.fillCircle(x, y - r * 1.6, r * 0.48);
+  }
+
+  private selectNewTarget(): void {
+    // Pick a random peg
+    this.activePegIndex = Phaser.Math.Between(0, this.pegPositions.length - 1);
+    const targetPeg = this.pegPositions[this.activePegIndex];
+
+    // Remove old indicator
+    this.activePegIndicator?.destroy();
+
+    // Spawn a bouncy star indicator above the target peg
+    this.activePegIndicator = this.add
+      .text(targetPeg.x, targetPeg.y - this.pegRadius * 2.5, "⭐", { fontSize: "36px" })
+      .setOrigin(0.5)
+      .setDepth(15);
+
+    this.tweens.add({
+      targets: this.activePegIndicator,
+      y: targetPeg.y - this.pegRadius * 2.8,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   private spawnRing(): void {
-    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.06, 40, 58);
-    const ring = this.add
+    const fontSize = Phaser.Math.Clamp(this.scale.width * 0.065, 46, 64);
+    this.ring = this.add
       .text(this.ringStart.x, this.ringStart.y, "🛟", { fontSize: `${fontSize}px` })
-      .setOrigin(0.5) as RingSprite;
-    this.physics.add.existing(ring);
-    ring.body.setCircle(fontSize * 0.34);
-    ring.body.setAllowGravity(false);
-    ring.body.setVelocity(0, 0);
-    ring.setInteractive({ useHandCursor: true, draggable: true });
-    this.input.setDraggable(ring);
-    this.track(ring);
-    this.ring = ring;
+      .setOrigin(0.5)
+      .setDepth(20);
+    this.track(this.ring);
   }
 
-  private onDrag = (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject, dragX: number, dragY: number) => {
-    if (obj !== this.ring || this.inFlight) return;
-    const dx = dragX - this.ringStart.x;
-    const dy = dragY - this.ringStart.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    let nx = dragX;
-    let ny = dragY;
-    if (dist > MAX_DRAG) {
-      const scale = MAX_DRAG / dist;
-      nx = this.ringStart.x + dx * scale;
-      ny = this.ringStart.y + dy * scale;
-    }
-    this.ring.setPosition(nx, ny);
-    this.drawAimLine();
-  };
-
-  private onDragEnd = (_pointer: Phaser.Input.Pointer, obj: Phaser.GameObjects.GameObject) => {
-    if (obj !== this.ring || this.inFlight) return;
-    this.launchRing();
-  };
-
-  private drawAimLine(): void {
-    if (!this.aimLine || !this.ring) return;
-    this.aimLine.clear();
-    const aimX = this.ringStart.x + (this.ringStart.x - this.ring.x);
-    const aimY = this.ringStart.y + (this.ringStart.y - this.ring.y);
-    this.aimLine.lineStyle(4, PALETTE.yellow, 0.8);
-    this.aimLine.lineBetween(this.ring.x, this.ring.y, aimX, aimY);
-  }
-
-  private launchRing(): void {
-    if (!this.ring) return;
-    const dx = this.ringStart.x - this.ring.x;
-    let dy = this.ringStart.y - this.ring.y;
-    if (dy > -120) dy = -120;
-
-    this.ring.body.setAllowGravity(true);
-    this.ring.body.setGravityY(GRAVITY_Y);
-    this.ring.body.setVelocity(dx * LAUNCH_POWER, dy * LAUNCH_POWER);
-
+  private tossRing(pointer: Phaser.Input.Pointer): void {
+    if (this.inFlight || !this.ring) return;
     this.inFlight = true;
-    this.scored = false;
-    this.aimLine?.clear();
-    this.ring.disableInteractive();
     this.statusText?.setText("");
+
+    // Find the closest peg to the tap X position
+    let closestIndex = 0;
+    let minDist = Infinity;
+    this.pegPositions.forEach((pos, idx) => {
+      const dist = Math.abs(pointer.x - pos.x);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIndex = idx;
+      }
+    });
+
+    const targetPeg = this.pegPositions[closestIndex];
+
+    // Play toss sound
+    this.audio.playSfx("tap-soft");
+
+    // Tween the ring to the target peg
+    // Parabolic arc: move to target X, Y, and scale up/down
+    this.tweens.add({
+      targets: this.ring,
+      x: targetPeg.x,
+      y: targetPeg.y - 12, // Land slightly below the peg tip to look "looped"
+      duration: 700,
+      ease: "Quad.easeOut",
+      onComplete: () => this.checkLanding(closestIndex),
+    });
+
+    // Scale tween for the 3D-like depth arc
+    this.tweens.add({
+      targets: this.ring,
+      scaleX: { from: 1, to: 1.45 },
+      scaleY: { from: 1, to: 1.45 },
+      duration: 350,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        // Drop down onto the peg snugly
+        this.tweens.add({
+          targets: this.ring,
+          scale: 0.85,
+          duration: 150,
+        });
+      },
+    });
   }
 
-  update(): void {
-    if (!this.inFlight || !this.ring) return;
-    const body = this.ring.body;
+  private checkLanding(pegIndex: number): void {
+    const isLuckyHit = pegIndex === this.activePegIndex;
+    this.audio.playSfx("clink");
+    
+    // Calculate score
+    const points = isLuckyHit ? 2 : 1;
+    this.scoreValue += points;
+    this.scoreBadge?.addScore(points);
 
-    if (!this.scored && body.velocity.y > 0) {
-      for (const peg of this.pegPositions) {
-        if (Math.abs(this.ring.y - peg.y) <= 18 && Math.abs(this.ring.x - peg.x) <= this.pegRadius * 0.8) {
-          this.scored = true;
-          this.handleScore();
-          break;
-        }
-      }
+    // Visual effect feedback
+    const targetPeg = this.pegPositions[pegIndex];
+    this.celebrate(targetPeg.x, targetPeg.y - this.pegRadius * 1.2);
+
+    if (isLuckyHit) {
+      this.statusText?.setText("Bullseye! Lucky peg +2!");
+      this.selectNewTarget();
+    } else {
+      this.statusText?.setText("Ringer! Nice toss!");
     }
 
-    if (this.ring.y > this.scale.height + 100 || this.ring.x < -100 || this.ring.x > this.scale.width + 100) {
-      this.inFlight = false;
-      if (!this.scored) this.handleMiss();
-    }
+    // Short delay before resetting ring
+    this.time.delayedCall(1100, () => this.resetRing());
   }
 
   private celebrate(x: number, y: number): void {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const spark = this.add
-        .text(x + Phaser.Math.Between(-30, 30), y, "✨", { fontSize: "26px" })
-        .setOrigin(0.5);
+        .text(x + Phaser.Math.Between(-25, 25), y + Phaser.Math.Between(-15, 15), "✨", { fontSize: "24px" })
+        .setOrigin(0.5)
+        .setDepth(15);
+      
       this.tweens.add({
         targets: spark,
-        y: spark.y - 60,
+        x: spark.x + Phaser.Math.Between(-30, 30),
+        y: spark.y - Phaser.Math.Between(30, 60),
         alpha: 0,
-        duration: 700,
-        ease: "Sine.easeOut",
+        scale: 0.3,
+        duration: 550 + Phaser.Math.Between(0, 150),
         onComplete: () => spark.destroy(),
       });
     }
   }
 
-  private handleScore(): void {
-    this.audio.playSfx("clink");
-    this.scoreBadge?.addScore(1);
-    this.statusText?.setText("Ringer! Great toss!");
-    if (this.ring) this.celebrate(this.ring.x, this.ring.y);
-    this.ring?.body.setVelocity(0, 0);
-    this.ring?.body.setAllowGravity(false);
-    this.time.delayedCall(900, () => this.resetRing());
-  }
-
-  private handleMiss(): void {
-    this.audio.playSfx("soft-roll");
-    this.statusText?.setText("Nice try! Toss again!");
-    this.time.delayedCall(500, () => this.resetRing());
-  }
-
   private resetRing(): void {
     if (!this.ring) return;
     this.ring.setPosition(this.ringStart.x, this.ringStart.y);
-    this.ring.body.setVelocity(0, 0);
-    this.ring.body.setAllowGravity(false);
-    this.ring.setInteractive({ useHandCursor: true, draggable: true });
+    this.ring.setScale(1);
     this.inFlight = false;
-    this.scored = false;
-    this.statusText?.setText("Drag the ring and let go to toss!");
+    this.statusText?.setText("Tap on a peg to toss the ring!");
   }
 }
