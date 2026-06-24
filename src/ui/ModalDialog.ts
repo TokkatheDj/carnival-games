@@ -51,7 +51,8 @@ export class ModalDialog extends Phaser.GameObjects.Container {
     if (opts.emoji) {
       const emojiText = scene.add
         .text(cx, cursorY, opts.emoji, { fontSize: "64px" })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setPadding(16);
       this.add(emojiText);
       cursorY += 84;
     } else {

@@ -94,7 +94,8 @@ export class BasketballScene extends BaseScene {
           color: "#ffffff",
           fontStyle: "700",
         })
-        .setOrigin(0.5),
+        .setOrigin(0.5)
+        .setPadding(12),
     );
 
     // Score Badge
@@ -228,6 +229,7 @@ export class BasketballScene extends BaseScene {
     container.add(plate);
 
     const label = this.add.text(0, 0, emoji, { fontSize: "26px" }).setOrigin(0.5);
+    label.setPadding(8);
     container.add(label);
 
     this.obstacles.push(container);
@@ -247,6 +249,7 @@ export class BasketballScene extends BaseScene {
     const fontSize = Phaser.Math.Clamp(this.scale.width * 0.07, 48, 68);
     this.ball = this.add
       .text(this.ballStart.x, this.ballStart.y, "🏀", { fontSize: `${fontSize}px` })
+      .setPadding(16)
       .setOrigin(0.5)
       .setDepth(20);
     this.track(this.ball);
@@ -352,6 +355,7 @@ export class BasketballScene extends BaseScene {
     for (let i = 0; i < 6; i++) {
       const spark = this.add
         .text(hx + Phaser.Math.Between(-30, 30), hy + Phaser.Math.Between(-10, 10), "✨", { fontSize: "26px" })
+        .setPadding(8)
         .setOrigin(0.5)
         .setDepth(15);
       

@@ -154,7 +154,8 @@ export class SpinWheelScene extends BaseScene {
       const ey = radius * 0.64 * Math.sin(midRad);
       const emojiText = this.add
         .text(ex, ey, prize.emoji, { fontSize: `${Math.max(20, radius * 0.22)}px` })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setPadding(12);
       container.add(emojiText);
     });
   }

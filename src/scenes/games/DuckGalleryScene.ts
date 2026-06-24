@@ -189,7 +189,8 @@ export class DuckGalleryScene extends BaseScene {
       .text(0, 0, emoji, {
         fontSize: `${size * 0.54}px`,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setPadding(12);
     container.add(textLabel);
 
     container.setSize(size, size);
@@ -239,7 +240,8 @@ export class DuckGalleryScene extends BaseScene {
         .text(x + Phaser.Math.Between(-24, 24), y + Phaser.Math.Between(-10, 10), p, {
           fontSize: `${Phaser.Math.Between(18, 28)}px`,
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setPadding(10);
 
       this.tweens.add({
         targets: spark,

@@ -159,8 +159,8 @@ export class GuessNumberScene extends BaseScene {
       return container;
     }
 
-    const fillColor = isGuessed ? 0x4b3b6e : PALETTE.blue;
-    const shadowColor = isGuessed ? 0x382c54 : PALETTE.blueDark;
+    const fillColor = isGuessed ? 0x4b3b6e : PALETTE.cream;
+    const shadowColor = isGuessed ? 0x382c54 : 0xe0d6b8;
 
     const g = this.add.graphics();
     g.fillStyle(shadowColor, 1);
@@ -173,7 +173,7 @@ export class GuessNumberScene extends BaseScene {
       .text(0, isGuessed ? -size * 0.12 : 0, String(n), {
         fontFamily: FONT_DISPLAY,
         fontSize: `${size * 0.42}px`,
-        color: isGuessed ? "rgba(255,255,255,0.55)" : "#ffffff",
+        color: isGuessed ? "rgba(255,255,255,0.55)" : PALETTE_CSS.textDark,
         fontStyle: "700",
       })
       .setOrigin(0.5);

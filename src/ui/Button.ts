@@ -43,6 +43,7 @@ export class Button extends Phaser.GameObjects.Container {
       color: opts.textColor ?? "#ffffff",
       fontStyle: "600",
     });
+    this.labelText.setPadding({ top: 8, bottom: 8, left: 8, right: 8 });
     this.labelText.setOrigin(0.5);
     this.add(this.labelText);
 

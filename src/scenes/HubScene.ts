@@ -63,6 +63,7 @@ export class HubScene extends Phaser.Scene {
         align: "center",
       })
       .setOrigin(0.5)
+      .setPadding(12)
       .setDepth(5);
 
     this.muteButton = new Button(this, width - 56, 56, {
@@ -120,6 +121,7 @@ export class HubScene extends Phaser.Scene {
 
     const emoji = this.add
       .text(0, -size * 0.16, game.emoji, { fontSize: `${size * 0.34}px` })
+      .setPadding(12)
       .setOrigin(0.5);
     container.add(emoji);
 

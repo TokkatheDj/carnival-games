@@ -95,7 +95,8 @@ export class SlotsScene extends BaseScene {
 
       const symbolText = this.add
         .text(cx, reelY, this.lastSymbols[i], { fontSize: `${reelSize * 0.55}px` })
-        .setOrigin(0.5);
+        .setOrigin(0.5)
+        .setPadding(12);
       this.track(symbolText);
       this.reelTexts.push(symbolText);
     }

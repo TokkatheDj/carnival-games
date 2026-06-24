@@ -85,7 +85,8 @@ export class RingTossScene extends BaseScene {
           color: "#ffffff",
           fontStyle: "700",
         })
-        .setOrigin(0.5),
+        .setOrigin(0.5)
+        .setPadding(12),
     );
 
     // Score Badge
@@ -161,6 +162,7 @@ export class RingTossScene extends BaseScene {
     // Spawn a bouncy star indicator above the target peg
     this.activePegIndicator = this.add
       .text(targetPeg.x, targetPeg.y - this.pegRadius * 2.5, "⭐", { fontSize: "36px" })
+      .setPadding(10)
       .setOrigin(0.5)
       .setDepth(15);
 
@@ -178,6 +180,7 @@ export class RingTossScene extends BaseScene {
     const fontSize = Phaser.Math.Clamp(this.scale.width * 0.065, 46, 64);
     this.ring = this.add
       .text(this.ringStart.x, this.ringStart.y, "🛟", { fontSize: `${fontSize}px` })
+      .setPadding(16)
       .setOrigin(0.5)
       .setDepth(20);
     this.track(this.ring);
@@ -262,6 +265,7 @@ export class RingTossScene extends BaseScene {
     for (let i = 0; i < 6; i++) {
       const spark = this.add
         .text(x + Phaser.Math.Between(-25, 25), y + Phaser.Math.Between(-15, 15), "✨", { fontSize: "24px" })
+        .setPadding(8)
         .setOrigin(0.5)
         .setDepth(15);
       

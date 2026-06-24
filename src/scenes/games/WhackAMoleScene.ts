@@ -198,6 +198,7 @@ export class WhackAMoleScene extends BaseScene {
     const critter = this.add
       .text(hole.x, hole.y, emoji, { fontSize: `${fontSize}px` })
       .setOrigin(0.5)
+      .setPadding(16)
       .setInteractive({ useHandCursor: true })
       .setScale(0)
       .setDepth(15);
