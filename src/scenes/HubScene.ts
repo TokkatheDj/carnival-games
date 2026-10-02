@@ -80,13 +80,24 @@ export class HubScene extends Phaser.Scene {
     });
     this.muteButton.setDepth(10);
 
-    const isPortrait = height >= width;
-    const cols = isPortrait ? 2 : 3;
-    const rows = Math.ceil(GAME_REGISTRY.length / cols);
-
     const gridTop = topBar + 16;
     const gridHeight = height - gridTop - 24;
     const gridWidth = width - 32;
+
+    // Pick the column count that gives the biggest tiles for this screen, so
+    // a new game never strands a tiny tile on its own row (7 games on a
+    // landscape tablet: 4 + 3 beats 3 + 3 + 1).
+    const count = GAME_REGISTRY.length;
+    let cols = 2;
+    let best = 0;
+    for (let c = 2; c <= Math.min(5, count); c++) {
+      const size = Math.min(gridWidth / c, gridHeight / Math.ceil(count / c));
+      if (size > best + 1) {
+        best = size;
+        cols = c;
+      }
+    }
+    const rows = Math.ceil(count / cols);
     const cellW = gridWidth / cols;
     const cellH = gridHeight / rows;
     const tileSize = Math.min(cellW, cellH) * 0.78;
@@ -94,7 +105,10 @@ export class HubScene extends Phaser.Scene {
     GAME_REGISTRY.forEach((game, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const cx = 16 + cellW * col + cellW / 2;
+      // A short last row is centred rather than left-aligned.
+      const inRow = row === rows - 1 ? count - row * cols : cols;
+      const rowOffset = ((cols - inRow) * cellW) / 2;
+      const cx = 16 + rowOffset + cellW * col + cellW / 2;
       const cy = gridTop + cellH * row + cellH / 2;
       this.tiles.push(this.createTile(cx, cy, tileSize, game, i));
     });

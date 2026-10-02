@@ -86,9 +86,13 @@ export class Button extends Phaser.GameObjects.Container {
     // top face
     this.bg.fillStyle(this.color, 1);
     this.bg.fillRoundedRect(-w / 2, -h / 2, w, h, r);
-    // soft highlight near top
+    // soft highlight near top. Its corner radius must not exceed half its own
+    // height or width - Phaser draws a stray box when it does, which showed as
+    // a grey square behind every round (square-sized) button.
+    const hw = w * 0.84;
+    const hh = h * 0.32;
     this.bg.fillStyle(0xffffff, 0.18);
-    this.bg.fillRoundedRect(-w / 2 + w * 0.08, -h / 2 + h * 0.12, w * 0.84, h * 0.32, r * 0.6);
+    this.bg.fillRoundedRect(-w / 2 + w * 0.08, -h / 2 + h * 0.12, hw, hh, Math.min(r * 0.6, hh / 2, hw / 2));
   }
 
   setLabel(text: string): void {
