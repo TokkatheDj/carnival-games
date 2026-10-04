@@ -1,5 +1,7 @@
 # Carnival Games
 
+[![CI](https://github.com/TokkatheDj/carnival-games/actions/workflows/ci.yml/badge.svg)](https://github.com/TokkatheDj/carnival-games/actions/workflows/ci.yml)
+
 Seven carnival mini-games for kids, made for tablets: big touch targets, bright colours, and sound effects made in code (no audio files).
 
 **Play:** https://play-carnival.netlify.app. On a tablet, *Add to Home Screen* installs it like an app.
