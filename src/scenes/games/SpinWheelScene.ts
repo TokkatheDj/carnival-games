@@ -41,6 +41,9 @@ export class SpinWheelScene extends BaseScene {
   }
 
   protected onCreate(): void {
+    // Phaser reuses this scene object: leaving with Home mid-spin destroys the spin's
+    // timers, so the old run's flag would stay true and Spin would never work again.
+    this.spinning = false;
     this.layoutAll(this.scale.width, this.scale.height);
   }
 
